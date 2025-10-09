@@ -21,9 +21,12 @@ repositories {
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation("org.springframework.retry:spring-retry")    // RetryTemplateを使うため
+    implementation 'org.springframework.retry:spring-retry'    // RetryTemplateを使うため
+
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation "org.testcontainers:junit-jupiter"
+    testImplementation "com.redis:testcontainers-redis:2.2.4"
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
