@@ -5,3 +5,5 @@ spring:
       port: 6379
   cache:
     type: redis
+server:
+  port: 8080

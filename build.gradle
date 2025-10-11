@@ -22,6 +22,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.retry:spring-retry'    // RetryTemplateを使うため
+    implementation 'io.lettuce:lettuce-core:6.3.2.RELEASE'
 
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation "org.testcontainers:junit-jupiter"
