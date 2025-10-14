@@ -107,3 +107,79 @@ sequenceDiagram
     R-->>F: 保存完了
     F-->>B: HTTP Response(Set-Cookie/TTL更新の可能性)
 ```
+
+```mermaid
+flowchart TB
+    %% --- 上層：Web ---
+    subgraph WEB["🌐 Web層（Spring MVC / Filter）"]
+        F["HttpSessionRepositoryFilter<br/>(Spring Session Filter)"]
+        C["Controller / Service"]
+    end
+
+    %% --- 中層：Spring Session + Retry + RedisTemplate ---
+    subgraph APP["🧠 アプリ層（Spring Session + Retry統合）"]
+        RSR["RedisIndexedSessionRepository<br/>（Spring Session）"]
+        SRO["sessionRedisOperations<br/>(= RetryingRedisTemplate)"]
+        RT["RetryTemplate"]
+        LCF["LettuceConnectionFactory"]
+        LC["Lettuce Client（io.lettuce.core）"]
+    end
+
+    %% --- 下層：Redis ---
+    subgraph REDIS["🗄️ Redis サーバ層"]
+        ST[(Standalone)]
+        SEN[(Sentinel)]
+        CLU[(Cluster)]
+    end
+
+    %% Connections
+    F -->|セッション読取/保存| RSR
+    C --> F
+    RSR --> SRO
+    SRO -->|内部で retryTemplate.execute..| RT
+    RT -->|3回など再試行| SRO
+    SRO -->|execute 呼出| LCF
+    LCF --> LC
+    LC -->|通信| ST
+    LC -->|構成により| SEN
+    LC -->|構成により| CLU
+
+    classDef layer fill:#fff3,stroke-dasharray:3 3;
+    class WEB,APP,REDIS layer;
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant F as HttpSessionRepositoryFilter
+    participant R as RedisIndexedSessionRepository
+    participant O as RetryingRedisTemplate(sessionRedisOperations)
+    participant T as RetryTemplate
+    participant L as LettuceConnectionFactory
+    participant X as Lettuce Client
+    participant D as Redis
+
+    B->>F: HTTP Request (Cookie:JSESSIONID)
+    F->>R: findById()（Redis読取）
+    R->>O: opsForHash().entries(...) → execute(...)
+    O->>T: retryTemplate.execute(action)
+    T->>O: super.execute(action)
+    O->>L: getConnection()
+    L->>X: HGETALL spring:session:sessions:<id>
+    X-->>O: OK or Exception
+    alt 一時的失敗（例: 接続タイムアウト）
+        X-->>O: RedisConnectionFailureException
+        O-->>T: Exception
+        T-->>T: Backoff(100ms→200ms→400ms...)
+        T->>O: 再試行
+        O->>L: getConnection()
+        L->>X: 再送
+        X-->>O: OK
+    else 成功
+        X-->>O: OK
+    end
+    O-->>R: セッションデータ取得成功
+    R-->>F: HttpSession オブジェクト返却
+    F->>B: HTTP Response（書込時も同様の流れで retryTemplate 経由）
+```
